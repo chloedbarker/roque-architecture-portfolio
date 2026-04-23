@@ -12,14 +12,14 @@
       <div class="logo">Roque Pérez Pareja</div>
       <nav>
         <a href="index.html">Home</a>
-        <a href="projects.html">Projects</a>
+        <a href="projects.html" class="nav-active">Projects</a>
         <a href="resume.html">Resume</a>
       </nav>
     </div>
   </header>
 
   <main>
-    <section class="container section">
+    <section class="container section page-header">
       <p class="eyebrow">Selected Work</p>
       <h1>Projects</h1>
       <p class="page-intro">
@@ -30,10 +30,18 @@
 
     <section class="container section project-list">
 
+      <!-- Medialab Almàssera — featured -->
       <section class="project-block featured-project">
-        <div class="project-image placeholder-box">Featured project image</div>
+        <div class="project-image project-image-gallery">
+          <img src="images/medialab-almasera/isometric-section.png" alt="Medialab Almàssera – isometric section" class="img-main" />
+          <div class="img-row">
+            <img src="images/medialab-almasera/diagrams.png" alt="Medialab Almàssera – diagrams" />
+            <img src="images/medialab-almasera/cores-functions.png" alt="Medialab Almàssera – cores and functions" />
+            <img src="images/medialab-almasera/site-surroundings.png" alt="Medialab Almàssera – site and surroundings" />
+          </div>
+        </div>
         <div class="project-info">
-          <p class="project-meta">Studio (Collaborative) | Almàssera, Spain | 2025</p>
+          <p class="project-meta">Studio (Collaborative) · Almàssera, Spain · 2025</p>
           <h2>Medialab Almàssera</h2>
           <p>
             A multidisciplinary cultural center developed within a former agricultural warehouse,
@@ -42,15 +50,26 @@
             a 7,000 m² site, exploring the relationship between an existing industrial structure and
             new architectural interventions.
           </p>
-          <p><strong>Role</strong> Collaborative design development, spatial systems, and architectural diagrams.</p>
-          <p><strong>Tools</strong> AutoCAD, Blender, Adobe</p>
+          <div class="project-tags">
+            <span>Collaborative design</span>
+            <span>Spatial systems</span>
+            <span>AutoCAD</span>
+            <span>Blender</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- Villa Blaricum -->
       <section class="project-block reverse">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image project-image-gallery">
+          <img src="images/villa-blaricum/front.png" alt="Villa Blaricum – front facade" class="img-main" />
+          <div class="img-row">
+            <img src="images/villa-blaricum/side.png" alt="Villa Blaricum – side elevation" />
+          </div>
+        </div>
         <div class="project-info">
-          <p class="project-meta">Internship | Blaricum, Netherlands | 2025</p>
+          <p class="project-meta">Internship · studio PROTOTYPE, Blaricum, Netherlands · 2025</p>
           <h2>Villa Blaricum</h2>
           <p>
             A private residence set within the natural landscape of North Holland, featuring charred
@@ -58,15 +77,27 @@
             focused on facade studies and roof detailing, balancing material performance,
             constructability, and architectural character.
           </p>
-          <p><strong>Role</strong> Facade and roof studies, material research, modeling, and rendering.</p>
-          <p><strong>Tools</strong> Archicad, SketchUp, Enscape, Adobe</p>
+          <div class="project-tags">
+            <span>Facade &amp; roof studies</span>
+            <span>Archicad</span>
+            <span>SketchUp</span>
+            <span>Enscape</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- Warmond Woonboot -->
       <section class="project-block">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image project-image-gallery">
+          <img src="images/warmond-woonboot/overall-plan.png" alt="Warmond Woonboot – overall plan" class="img-main" />
+          <div class="img-row">
+            <img src="images/warmond-woonboot/ground-floor.png" alt="Warmond Woonboot – ground floor" />
+            <img src="images/warmond-woonboot/basement.png" alt="Warmond Woonboot – basement" />
+          </div>
+        </div>
         <div class="project-info">
-          <p class="project-meta">Internship | Warmond, Netherlands | 2025</p>
+          <p class="project-meta">Internship · studio PROTOTYPE, Warmond, Netherlands · 2025</p>
           <h2>Warmond Woonboot</h2>
           <p>
             Architectural documentation for a completed houseboat project in Warmond, developed
@@ -74,15 +105,26 @@
             model into simplified, polished drawings for press and award submissions, with an emphasis
             on clarity, precision, and visual communication.
           </p>
-          <p><strong>Role</strong> Produced and refined architectural drawings from Archicad models for publication.</p>
-          <p><strong>Tools</strong> Archicad, AutoCAD, Adobe</p>
+          <div class="project-tags">
+            <span>Technical documentation</span>
+            <span>Archicad</span>
+            <span>AutoCAD</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- K-seta -->
       <section class="project-block reverse">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image project-image-gallery">
+          <img src="images/k-seta/plan.png" alt="K-seta – site plan" class="img-main" />
+          <div class="img-row">
+            <img src="images/k-seta/floorplan.png" alt="K-seta – floor plan" />
+            <img src="images/k-seta/section.png" alt="K-seta – section" />
+          </div>
+        </div>
         <div class="project-info">
-          <p class="project-meta">Competition | l’Horta de València, Spain | 2025</p>
+          <p class="project-meta">Competition · l'Horta de València, Spain · 2025</p>
           <h2>K-seta</h2>
           <p>
             A lightweight community structure designed for the agricultural landscape surrounding
@@ -90,31 +132,46 @@
             recycled scaffolding and permeable materials to minimize environmental impact while
             supporting gardening, gathering, and broader cultural activities.
           </p>
-          <p><strong>Role</strong> Team-based design, concept development, and visualization.</p>
-          <p><strong>Tools</strong> Blender, Adobe</p>
+          <div class="project-tags">
+            <span>Team competition</span>
+            <span>Concept development</span>
+            <span>Blender</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- C/ La Cort - Font -->
       <section class="project-block">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image">
+          <img src="images/c-la-cort-font/plan.png" alt="C/ La Cort Font – plan" />
+        </div>
         <div class="project-info">
-          <p class="project-meta">Studio | Benicàssim, Spain | 2024</p>
-          <h2>C/ La Cort - Font</h2>
+          <p class="project-meta">Studio · Benicàssim, Spain · 2024</p>
+          <h2>C/ La Cort — Font</h2>
           <p>
             A residential development composed of six single-family homes and one café near the beach
             in Benicàssim. Inspired by fractal geometry and modular repetition, the project explores how
             repeated spatial systems can generate variation while maintaining formal coherence,
             encouraging both privacy and social interaction in a coastal neighborhood setting.
           </p>
-          <p><strong>Role</strong> Design development, spatial systems, and architectural visualization.</p>
-          <p><strong>Tools</strong> AutoCAD, Blender, Adobe</p>
+          <div class="project-tags">
+            <span>Design development</span>
+            <span>Spatial systems</span>
+            <span>AutoCAD</span>
+            <span>Blender</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- Desierto de las Palmas -->
       <section class="project-block reverse">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image">
+          <img src="images/desierto-de-las-palmas/main.png" alt="Desierto de las Palmas – interior view" />
+        </div>
         <div class="project-info">
-          <p class="project-meta">Studio | Benicàssim, Spain | 2023</p>
+          <p class="project-meta">Studio · Benicàssim, Spain · 2023</p>
           <h2>Desierto de las Palmas</h2>
           <p>
             A home and art studio located within the ruins of a historic monastery, designed to foster
@@ -122,15 +179,22 @@
             spaces within a modular timber structure inspired by Scandinavian architectural precedents,
             creating a quiet retreat for artistic practice.
           </p>
-          <p><strong>Role</strong> Full design development including concept, spatial organization, and representation.</p>
-          <p><strong>Tools</strong> AutoCAD, Blender, Adobe</p>
+          <div class="project-tags">
+            <span>Full design development</span>
+            <span>AutoCAD</span>
+            <span>Blender</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
+      <!-- Art School & Residence -->
       <section class="project-block">
-        <div class="project-image placeholder-box">Project image</div>
+        <div class="project-image">
+          <img src="images/art-school-residence/main.png" alt="Art School and Residence – courtyard view" />
+        </div>
         <div class="project-info">
-          <p class="project-meta">Studio | Ciutat Vella, València, Spain | 2023</p>
+          <p class="project-meta">Studio · Ciutat Vella, València, Spain · 2023</p>
           <h2>Art School &amp; Residence</h2>
           <p>
             A contemporary art school and residential complex organized around courtyards to maximize
@@ -138,8 +202,12 @@
             rooms, and a 14-room residence, using a double-skin facade system to filter sunlight,
             improve environmental performance, and create a strong relationship between interior and exterior.
           </p>
-          <p><strong>Role</strong> Design, layout development, and architectural visualization.</p>
-          <p><strong>Tools</strong> AutoCAD, Blender, Adobe</p>
+          <div class="project-tags">
+            <span>Design &amp; visualization</span>
+            <span>AutoCAD</span>
+            <span>Blender</span>
+            <span>Adobe Suite</span>
+          </div>
         </div>
       </section>
 
