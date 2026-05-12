@@ -296,3 +296,33 @@ h3 {
     min-height: 260px;
   }
 }
+
+/* Gallery layout inside project blocks */
+.project-image-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: unset; /* override the generic min-height */
+}
+
+.project-image-gallery .img-main {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+}
+
+.featured-project .project-image-gallery .img-main {
+  height: 360px;
+}
+
+.img-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.img-row img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+}
