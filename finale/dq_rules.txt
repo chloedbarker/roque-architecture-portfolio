@@ -1,0 +1,600 @@
+Auto Athenium Data Quality Rules
+Auto New Business | Collibra review
+
+Rules 1–8 were provided for review and validation. Rules 9–11 are proposed
+additions. The notes below use the Athena results reported on November 12, 2026.
+
+Validation findings and decisions
+
+- Data coverage (Rules 1–6 and 11). Randomization history and the source mart
+  end on January 26, 2026. Audit history ends on September 15, 2026. Confirm
+  which tables receive current data and which completed dates both histories
+  should cover before interpreting reconciliation exceptions. Agree on the
+  monitoring window for Rules 1, 2, 3 and 5, which scan all available history.
+- Transaction matching (Rules 2–4 and 10). Every PSTAR and HUON policy counted
+  in Check C had at least one row with a NULL transaction number. Rule 2 uses
+  that field in its match. Rules 3 and 4 omit it. Confirm which fields uniquely
+  identify a transaction for each source.
+- Volume baseline (Rule 6). The dates shown in the sample shifted from daily
+  to roughly five-day intervals. Confirm whether the 10 same-weekday dates
+  provide a comparable baseline under the current cadence.
+- Reviewer checks (Rules 7–8). The reported checks returned zero exceptions.
+  Confirm the production schema, the Auto cycle and the number of eligible
+  records or groups before interpreting the result.
+- Scope (Rules 1–6 and 9–11). The pipeline queries use the tables as provided.
+  Confirm that they contain only the intended Auto population before monitoring.
+
+Use dq_rule_validation.sql for the Athena validation queries referenced here.
+Run Rules 9–11 against the intended tables before enabling them in Collibra.
+
+======================================================================
+REFERENCE RULES FOR VALIDATION
+======================================================================
+
+Auto Athenium Data Quality Rules for Collibra
+Draft data quality checks for the Auto New Business Athenium audit process
+Scope
+This document defines Auto New Business Athenium data quality checks using the confirmed Auto audit pipeline tables. Each rule is separate, so it can be monitored independently in Collibra. Rules 1-8 are the current rules. Rules 9-11 are proposed additions for review.
+Tables used in this draft:
+- uw_analytics.new_business_audit_mart_hist
+- uw_analytics.new_business_audit_hist
+- uw_analytics.new_business_randomization_hist
+- insurance_master.policy_audit_transactions_master
+Rule 1: Policy Number Completeness
+Purpose
+Ensure every Auto policy selected for Athenium has a populated policy number.
+Tables Used
+uw_analytics.new_business_randomization_hist
+What the Check Does
+Reviews the final selected Auto population and returns distinct policy transactions where the policy number is null or blank.
+Failure Condition
+Any returned record is a failure.
+Expected Result
+Zero rows returned.
+SQL Query
+SELECT DISTINCT
+    process_date,
+    data_source,
+    product,
+    transaction_number,
+    transaction_term_effective_date,
+    transaction_timestamp,
+    employeeid
+FROM uw_analytics.new_business_randomization_hist
+WHERE policynumber IS NULL
+   OR TRIM(CAST(policynumber AS VARCHAR)) = ''
+ORDER BY process_date DESC, data_source, product;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 failures.
+Rule 2: Selected Policy Exists in Source Mart
+Purpose
+Ensure every policy transaction in the final Auto randomization history can be traced back to the Auto audit source mart history.
+Tables Used
+uw_analytics.new_business_randomization_hist; uw_analytics.new_business_audit_mart_hist
+What the Check Does
+Creates a distinct policy-transaction population from randomization history and checks for a matching source record using source, product, policy number, transaction number, term effective date, and transaction timestamp.
+Failure Condition
+A selected policy transaction has no matching record in the source mart history.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH randomized AS (
+    SELECT DISTINCT
+        process_date,
+        data_source,
+        product,
+        CAST(policynumber AS VARCHAR) AS policy_number,
+        CAST(transaction_number AS VARCHAR) AS transaction_number,
+        CAST(transaction_term_effective_date AS DATE) AS term_effective_date,
+        CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+    FROM uw_analytics.new_business_randomization_hist
+)
+SELECT r.*
+FROM randomized r
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM uw_analytics.new_business_audit_mart_hist m
+    WHERE m.data_source = r.data_source
+      AND m.product = r.product
+      AND CAST(m.policynumber AS VARCHAR) = r.policy_number
+      AND CAST(m.transaction_number AS VARCHAR) = r.transaction_number
+      AND CAST(m.transaction_term_effective_date AS DATE) = r.term_effective_date
+      AND CAST(m.transaction_timestamp AS TIMESTAMP) = r.transaction_timestamp
+)
+ORDER BY r.process_date DESC, r.data_source, r.product, r.policy_number;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 failures.
+Rule 3: Selection Reconciliation
+Purpose
+Ensure the policy transactions marked as selected in audit history reconcile to the policy transactions persisted in randomization history.
+Tables Used
+uw_analytics.new_business_audit_hist; uw_analytics.new_business_randomization_hist
+What the Check Does
+Compares distinct select_indicator = true policy transactions in audit history with distinct policy transactions in randomization history for the same process date. The comparison is based on the policy-transaction identity; agent completeness is checked separately.
+Failure Condition
+A true selection is missing from randomization history, or a randomization history policy does not have a matching true selection.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH selected AS (
+    SELECT DISTINCT
+        process_date,
+        data_source,
+        product,
+        CAST(policy_number AS VARCHAR) AS policy_number,
+        CAST(term_effective_date AS DATE) AS term_effective_date,
+        CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+    FROM uw_analytics.new_business_audit_hist
+    WHERE select_indicator = 'true'
+),
+randomized AS (
+    SELECT DISTINCT
+        process_date,
+        data_source,
+        product,
+        CAST(policynumber AS VARCHAR) AS policy_number,
+        CAST(transaction_term_effective_date AS DATE) AS term_effective_date,
+        CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+    FROM uw_analytics.new_business_randomization_hist
+)
+SELECT
+    COALESCE(s.process_date, r.process_date) AS process_date,
+    COALESCE(s.data_source, r.data_source) AS data_source,
+    COALESCE(s.product, r.product) AS product,
+    COALESCE(s.policy_number, r.policy_number) AS policy_number,
+    COALESCE(s.term_effective_date, r.term_effective_date) AS term_effective_date,
+    COALESCE(s.transaction_timestamp, r.transaction_timestamp) AS transaction_timestamp,
+    CASE
+        WHEN s.policy_number IS NULL THEN 'RANDOMIZATION_WITHOUT_TRUE_SELECTION'
+        WHEN r.policy_number IS NULL THEN 'TRUE_SELECTION_MISSING_FROM_RANDOMIZATION'
+    END AS dq_issue
+FROM selected s
+FULL OUTER JOIN randomized r
+    ON s.process_date = r.process_date
+   AND s.data_source = r.data_source
+   AND s.product = r.product
+   AND s.policy_number = r.policy_number
+   AND s.term_effective_date = r.term_effective_date
+   AND s.transaction_timestamp = r.transaction_timestamp
+WHERE s.policy_number IS NULL
+   OR r.policy_number IS NULL
+ORDER BY process_date DESC, dq_issue, data_source, product, policy_number;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 reconciliation differences.
+Rule 4: Previously Processed Policy Re-entered Selection
+Purpose
+Ensure a policy transaction processed in the current audit-selection run was not already processed in an earlier run.
+Tables Used
+uw_analytics.new_business_audit_hist
+What the Check Does
+Identifies the latest process date, builds the distinct current-run policy-transaction population, and checks each transaction against all prior audit-selection history. The comparison intentionally does not use the agent identifier, so a missing agent value cannot allow the same transaction to bypass the duplicate check.
+Failure Condition
+A policy transaction in the current process date also exists on an earlier process date.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH latest_run AS (
+    SELECT MAX(process_date) AS current_process_date
+    FROM uw_analytics.new_business_audit_hist
+),
+current_run AS (
+    SELECT DISTINCT
+        h.process_date,
+        h.data_source,
+        h.product,
+        CAST(h.policy_number AS VARCHAR) AS policy_number,
+        CAST(h.term_effective_date AS DATE) AS term_effective_date,
+        CAST(h.transaction_timestamp AS TIMESTAMP) AS transaction_timestamp,
+        h.transaction_user,
+        h.select_indicator
+    FROM uw_analytics.new_business_audit_hist h
+    CROSS JOIN latest_run r
+    WHERE h.process_date = r.current_process_date
+      AND h.select_indicator IN ('true', 'false')
+),
+prior_history AS (
+    SELECT DISTINCT
+        h.data_source,
+        h.product,
+        CAST(h.policy_number AS VARCHAR) AS policy_number,
+        CAST(h.term_effective_date AS DATE) AS term_effective_date,
+        CAST(h.transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+    FROM uw_analytics.new_business_audit_hist h
+    CROSS JOIN latest_run r
+    WHERE h.process_date < r.current_process_date
+      AND h.select_indicator IN ('true', 'false')
+)
+SELECT c.*
+FROM current_run c
+INNER JOIN prior_history p
+    ON c.data_source = p.data_source
+   AND c.product = p.product
+   AND c.policy_number = p.policy_number
+   AND c.term_effective_date = p.term_effective_date
+   AND c.transaction_timestamp = p.transaction_timestamp
+ORDER BY c.data_source, c.product, c.policy_number;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 previously processed policy transactions in the current run.
+Rule 5: Agent Identifier Completeness
+Purpose
+Ensure every Auto policy that completes a true/false randomization decision has the agent identifier required by the selection process.
+Tables Used
+uw_analytics.new_business_audit_hist
+What the Check Does
+Reviews policies that received a true or false selection decision and returns records where transaction_user is null or blank. In the Auto selection history, transaction_user carries the agent identifier used by the randomization process. A missing value can prevent prior selections from being matched correctly on later runs.
+Failure Condition
+A policy transaction that completed a true/false selection decision has no populated agent identifier.
+Expected Result
+Zero rows returned.
+SQL Query
+SELECT DISTINCT
+    process_date,
+    data_source,
+    product,
+    policy_number,
+    term_effective_date,
+    transaction_timestamp,
+    select_indicator
+FROM uw_analytics.new_business_audit_hist
+WHERE select_indicator IN ('true', 'false')
+  AND (
+        transaction_user IS NULL
+        OR TRIM(CAST(transaction_user AS VARCHAR)) = ''
+      )
+ORDER BY process_date DESC, data_source, product, policy_number;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 failures.
+Rule 6: Selected Policy Volume Anomaly by State
+Purpose
+Identify unusually high or low Auto Athenium selected-policy volume by state using each state's own recent history.
+Tables Used
+uw_analytics.new_business_randomization_hist
+What the Check Does
+Counts distinct selected policy transactions by process date and state. The most recent process date is treated as the current run. The historical baseline uses the previous 10 process dates that fall on the same day of the week as the current run. For example, a Monday run is compared with the prior 10 Mondays, while a Sunday run is compared with the prior 10 Sundays. For each state, the query calculates the average and sample standard deviation across those 10 comparable process dates and flags the current count when it falls outside average plus or minus three standard deviations. A state with no selected policies on one of the 10 baseline dates is counted as zero for that date.
+Failure Condition
+The current selected-policy count is above average + 3 standard deviations or below average - 3 standard deviations, after 10 prior same-weekday process dates are available.
+Expected Result
+No alerts. If fewer than 10 prior same-weekday process dates are available, the check passes without triggering an alert.
+SQL Query
+WITH current_run AS (
+    SELECT MAX(process_date) AS current_process_date
+    FROM uw_analytics.new_business_randomization_hist
+),
+policy_transactions AS (
+    SELECT DISTINCT
+        process_date,
+        state,
+        data_source,
+        product,
+        CAST(policynumber AS VARCHAR) AS policy_number,
+        CAST(transaction_number AS VARCHAR) AS transaction_number,
+        CAST(transaction_term_effective_date AS DATE) AS term_effective_date,
+        CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+    FROM uw_analytics.new_business_randomization_hist
+    WHERE state IS NOT NULL
+      AND TRIM(state) <> ''
+),
+daily_counts AS (
+    SELECT
+        process_date,
+        state,
+        COUNT(*) AS selected_policy_count
+    FROM policy_transactions
+    GROUP BY process_date, state
+),
+same_weekday_dates AS (
+    SELECT process_date
+    FROM (
+        SELECT
+            d.process_date,
+            ROW_NUMBER() OVER (ORDER BY d.process_date DESC) AS rn
+        FROM (
+            SELECT DISTINCT process_date
+            FROM daily_counts
+        ) d
+        CROSS JOIN current_run c
+        WHERE d.process_date < c.current_process_date
+          AND DAY_OF_WEEK(d.process_date) = DAY_OF_WEEK(c.current_process_date)
+    ) x
+    WHERE rn <= 10
+),
+relevant_states AS (
+    SELECT DISTINCT d.state
+    FROM daily_counts d
+    CROSS JOIN current_run c
+    WHERE d.process_date = c.current_process_date
+    UNION
+    SELECT DISTINCT d.state
+    FROM daily_counts d
+    INNER JOIN same_weekday_dates b
+        ON d.process_date = b.process_date
+),
+history_grid AS (
+    SELECT
+        b.process_date,
+        s.state,
+        COALESCE(d.selected_policy_count, 0) AS selected_policy_count
+    FROM same_weekday_dates b
+    CROSS JOIN relevant_states s
+    LEFT JOIN daily_counts d
+        ON d.process_date = b.process_date
+       AND d.state = s.state
+),
+baseline AS (
+    SELECT
+        state,
+        COUNT(*) AS baseline_days,
+        AVG(CAST(selected_policy_count AS DOUBLE)) AS avg_selected_count,
+        STDDEV_SAMP(CAST(selected_policy_count AS DOUBLE)) AS std_selected_count
+    FROM history_grid
+    GROUP BY state
+),
+current_counts AS (
+    SELECT
+        s.state,
+        COALESCE(d.selected_policy_count, 0) AS current_selected_count
+    FROM relevant_states s
+    CROSS JOIN current_run c
+    LEFT JOIN daily_counts d
+        ON d.process_date = c.current_process_date
+       AND d.state = s.state
+)
+SELECT
+    c.current_process_date AS process_date,
+    cc.state,
+    cc.current_selected_count,
+    COALESCE(b.baseline_days, 0) AS baseline_days,
+    ROUND(b.avg_selected_count, 2) AS avg_selected_count,
+    ROUND(b.std_selected_count, 2) AS std_selected_count,
+    ROUND(
+        GREATEST(0, b.avg_selected_count - (3 * b.std_selected_count)),
+        2
+    ) AS lower_threshold,
+    ROUND(
+        b.avg_selected_count + (3 * b.std_selected_count),
+        2
+    ) AS upper_threshold,
+    CASE
+        WHEN COALESCE(b.baseline_days, 0) < 10
+             OR b.std_selected_count IS NULL
+            THEN 'PASS'
+        WHEN cc.current_selected_count
+             < GREATEST(0, b.avg_selected_count - (3 * b.std_selected_count))
+          OR cc.current_selected_count
+             > b.avg_selected_count + (3 * b.std_selected_count)
+            THEN 'ALERT'
+        ELSE 'PASS'
+    END AS dq_status
+FROM current_counts cc
+CROSS JOIN current_run c
+LEFT JOIN baseline b
+    ON cc.state = b.state
+ORDER BY dq_status DESC, cc.state;
+Notes / Threshold
+Monitoring DQ rule. Use the previous 10 process dates that fall on the same day of the week as the current run. Calculate the state-level average and sample standard deviation across those 10 comparable dates. Alert when the current state volume falls outside the historical average +/- 3 standard deviations. If fewer than 10 prior same-weekday process dates are available, the check passes without triggering an alert.
+How the Standard Deviation Threshold Is Derived
+Standard deviation measures how much selected-policy volume varies around its average for comparable runs. A small standard deviation means the state is usually stable on that day of the week. A larger standard deviation means the state naturally has wider swings. The SQL calculates the sample standard deviation with STDDEV_SAMP using the prior 10 same-weekday process-date counts for each state.
+The baseline is derived in four steps: (1) identify the current run day of the week, (2) select the previous 10 process dates with that same weekday, (3) calculate each state's average and sample standard deviation across those 10 counts, and (4) compare the current state count with average +/- 3 standard deviations. In statistical terms, sample standard deviation is the square root of the sum of squared differences from the average divided by n - 1. The SQL performs this calculation through STDDEV_SAMP.
+Lower threshold = same-weekday average - (3 x standard deviation)
+Upper threshold = same-weekday average + (3 x standard deviation)
+Example
+Assume the current process date is a Monday. The query retrieves the previous 10 Mondays for Texas.
+Average of the prior 10 Monday counts = 150
+Sample standard deviation of those 10 Monday counts = 20
+A standard deviation of 20 means the historical Monday counts typically vary around the 150 average by about 20 policies. The monitoring range uses three standard deviations:
+Lower threshold = 150 - (3 x 20) = 90
+Upper threshold = 150 + (3 x 20) = 210
+If the current Monday Texas count is 155, it falls between 90 and 210, so the result is PASS.
+If the current Monday Texas count is 225, it is above 210, so the result is ALERT for unusually high volume.
+If the current Monday Texas count is 70, it is below 90, so the result is ALERT for unusually low volume.
+The same logic applies automatically to every day of the week. A Saturday run uses the prior 10 Saturdays; a Sunday run uses the prior 10 Sundays. If fewer than 10 prior matching weekdays exist, the rule returns PASS and does not alert.
+Rule 7: Reviewer Assignment Completeness
+Purpose
+Ensure every policy in the current Auto monthly audit population has a populated primary reviewer employee ID.
+Tables Used
+insurance_master.policy_audit_transactions_master
+What the Check Does
+Identifies the latest monthly Auto audit cycle using region_long_name values in the format Auto YYYY-MM and returns policies where reviewer_1_employee_id is null. The monthly pattern intentionally excludes AO, quarterly, targeted, and other Auto audit populations.
+Failure Condition
+A policy in the latest monthly Auto audit cycle does not have a populated reviewer_1_employee_id.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH latest_auto_month AS (
+    SELECT MAX(
+        REGEXP_EXTRACT(
+            region_long_name,
+            '^Auto ([0-9]{4}-[0-9]{2})$',
+            1
+        )
+    ) AS cycle_month
+    FROM insurance_master.policy_audit_transactions_master
+    WHERE REGEXP_LIKE(
+        region_long_name,
+        '^Auto [0-9]{4}-[0-9]{2}$'
+    )
+)
+SELECT
+    a.region_long_name,
+    a.policy_number_full,
+    a.agent_employee_id,
+    a.agent_name,
+    a.reviewer_1_username,
+    a.reviewer_1_first_name,
+    a.reviewer_1_last_name
+FROM insurance_master.policy_audit_transactions_master a
+CROSS JOIN latest_auto_month c
+WHERE a.region_long_name = CONCAT('Auto ', c.cycle_month)
+  AND a.reviewer_1_employee_id IS NULL
+LIMIT 100;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 failures. The rule evaluates the latest monthly Auto cycle rather than historical cycles because older records can contain reviewer username/name information even when the employee ID was not populated.
+Rule 8: Agent-to-Reviewer Assignment Consistency
+Purpose
+Ensure policies for the same agent are assigned consistently to one primary reviewer for the same Auto audit assignment date.
+Tables Used
+insurance_master.policy_audit_transactions_master
+What the Check Does
+For the latest monthly Auto audit cycle, groups policies by agent and reviewer start date and counts distinct reviewer_1_employee_id values. The rule flags an agent/date combination when policies for that agent are assigned to more than one primary reviewer.
+Failure Condition
+The same agent has more than one reviewer_1_employee_id on the same reviewer_1_start_date within the latest monthly Auto audit cycle.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH latest_auto_month AS (
+    SELECT MAX(
+        REGEXP_EXTRACT(
+            region_long_name,
+            '^Auto ([0-9]{4}-[0-9]{2})$',
+            1
+        )
+    ) AS cycle_month
+    FROM insurance_master.policy_audit_transactions_master
+    WHERE REGEXP_LIKE(
+        region_long_name,
+        '^Auto [0-9]{4}-[0-9]{2}$'
+    )
+)
+SELECT
+    a.region_long_name,
+    a.agent_employee_id,
+    a.agent_name,
+    a.reviewer_1_start_date,
+    COUNT(DISTINCT a.reviewer_1_employee_id) AS reviewer_count,
+    ARRAY_AGG(DISTINCT a.reviewer_1_employee_id) AS reviewer_employee_ids,
+    COUNT(DISTINCT a.policy_number_full) AS policy_count
+FROM insurance_master.policy_audit_transactions_master a
+CROSS JOIN latest_auto_month c
+WHERE a.region_long_name = CONCAT('Auto ', c.cycle_month)
+  AND a.agent_employee_id IS NOT NULL
+  AND a.reviewer_1_employee_id IS NOT NULL
+  AND a.reviewer_1_start_date IS NOT NULL
+GROUP BY
+    a.region_long_name,
+    a.agent_employee_id,
+    a.agent_name,
+    a.reviewer_1_start_date
+HAVING COUNT(DISTINCT a.reviewer_1_employee_id) > 1
+ORDER BY reviewer_count DESC, policy_count DESC
+LIMIT 100;
+Notes / Threshold
+Hard DQ rule. Threshold = 0 inconsistent agent-to-reviewer assignments. Reviewer assignments can legitimately change over time, so the rule does not require one reviewer per agent across an entire month or across historical audit cycles.
+
+======================================================================
+PROPOSED ADDITIONS
+======================================================================
+
+Rule 9: Selection Indicator Validity
+Purpose
+Ensure every audit history record has a recognized selection decision, so Rules 3-5 do not skip unexpected values.
+Tables Used
+uw_analytics.new_business_audit_hist
+What the Check Does
+Reviews audit history and returns the process date, unexpected select_indicator value and affected row count. The allowed values are the exact strings 'true' and 'false', which were the only values observed in Check E.
+Failure Condition
+A record has a null select_indicator or a value other than 'true' or 'false'.
+Expected Result
+Zero rows returned.
+SQL Query
+SELECT
+    process_date,
+    select_indicator,
+    COUNT(*) AS row_count
+FROM uw_analytics.new_business_audit_hist
+WHERE select_indicator IS NULL
+   OR select_indicator NOT IN ('true', 'false')
+GROUP BY process_date, select_indicator
+ORDER BY process_date DESC, select_indicator;
+Notes / Threshold
+Proposed hard DQ rule. Threshold = 0 failures. Confirm whether audit history can include valid pending decisions before using a zero threshold.
+Rule 10: Selection Key Completeness
+Purpose
+Ensure the fields used to identify and match policy transactions by run are populated, so exceptions in Rules 2-4 reflect true mismatches rather than missing values.
+Tables Used
+uw_analytics.new_business_randomization_hist; uw_analytics.new_business_audit_hist
+What the Check Does
+Reviews randomization history and completed true/false decisions in audit history and returns distinct policy transactions where the process date, data source, product, term effective date or transaction timestamp is null, or a text field is blank. Policy number is also checked in audit history. Rule 1 covers policy number in randomization history.
+Failure Condition
+A policy transaction is missing one or more fields used to identify or match it.
+Expected Result
+Zero rows returned.
+SQL Query
+SELECT DISTINCT
+    'randomization_hist' AS table_name,
+    process_date,
+    data_source,
+    product,
+    CAST(policynumber AS VARCHAR) AS policy_number,
+    CAST(transaction_term_effective_date AS DATE) AS term_effective_date,
+    CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+FROM uw_analytics.new_business_randomization_hist
+WHERE process_date IS NULL
+   OR data_source IS NULL
+   OR TRIM(CAST(data_source AS VARCHAR)) = ''
+   OR product IS NULL
+   OR TRIM(CAST(product AS VARCHAR)) = ''
+   OR transaction_term_effective_date IS NULL
+   OR transaction_timestamp IS NULL
+UNION ALL
+SELECT DISTINCT
+    'audit_hist' AS table_name,
+    process_date,
+    data_source,
+    product,
+    CAST(policy_number AS VARCHAR) AS policy_number,
+    CAST(term_effective_date AS DATE) AS term_effective_date,
+    CAST(transaction_timestamp AS TIMESTAMP) AS transaction_timestamp
+FROM uw_analytics.new_business_audit_hist
+WHERE select_indicator IN ('true', 'false')
+  AND (
+        process_date IS NULL
+        OR data_source IS NULL
+        OR TRIM(CAST(data_source AS VARCHAR)) = ''
+        OR product IS NULL
+        OR TRIM(CAST(product AS VARCHAR)) = ''
+        OR policy_number IS NULL
+        OR TRIM(CAST(policy_number AS VARCHAR)) = ''
+        OR term_effective_date IS NULL
+        OR transaction_timestamp IS NULL
+      )
+ORDER BY process_date DESC, table_name, data_source, product;
+Notes / Threshold
+Proposed hard DQ rule. Threshold = 0 failures. Transaction number is excluded because Check C found at least one missing value for every PSTAR and HUON policy. Confirm source-specific requirements separately.
+Rule 11: Selection Data Freshness
+Purpose
+Ensure the Auto pipeline tables are receiving current process dates, so rules that evaluate the latest available date are not re-evaluating old data.
+Tables Used
+uw_analytics.new_business_audit_mart_hist; uw_analytics.new_business_audit_hist; uw_analytics.new_business_randomization_hist
+What the Check Does
+Finds the latest process date in each table and returns any table with no process dates or with a latest process date more than seven calendar days before the query date.
+Failure Condition
+A table's latest process date is more than seven days old, or the table has no process dates.
+Expected Result
+Zero rows returned.
+SQL Query
+WITH latest_dates AS (
+    SELECT
+        'audit_mart_hist' AS table_name,
+        CAST(MAX(process_date) AS DATE) AS latest_process_date
+    FROM uw_analytics.new_business_audit_mart_hist
+    UNION ALL
+    SELECT
+        'audit_hist',
+        CAST(MAX(process_date) AS DATE)
+    FROM uw_analytics.new_business_audit_hist
+    UNION ALL
+    SELECT
+        'randomization_hist',
+        CAST(MAX(process_date) AS DATE)
+    FROM uw_analytics.new_business_randomization_hist
+)
+SELECT
+    table_name,
+    latest_process_date,
+    DATE_DIFF('day', latest_process_date, CURRENT_DATE) AS days_since_latest
+FROM latest_dates
+WHERE latest_process_date IS NULL
+   OR DATE_DIFF('day', latest_process_date, CURRENT_DATE) > 7
+ORDER BY days_since_latest DESC;
+Notes / Threshold
+Proposed hard DQ rule. Threshold = 0 stale tables. Seven days is a draft tolerance. Check B's reported dates would put all three tables outside it. Confirm the expected update cadence for each table before setting a monitoring threshold.
