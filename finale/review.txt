@@ -1,0 +1,27 @@
+Auto Athenium Data Quality | Rule Review
+November 13, 2026 | Chloe Barker
+
+Validation of Rules 1-8 based on the Athena results from November 12, 2026. The rule logic is sound. The points below are what should be confirmed before the results can be trusted in Collibra.
+
+Applies to Rules 1-6
+- Data currency. Randomization history and the source mart end on January 26, 2026, and audit history ends on September 15, 2026. Confirm which tables still receive current data.
+- Product scope. The SQL has no product filter. The product codes present appear to be state-level Auto codes. Confirm the tables contain only the Auto population.
+
+Rule by rule
+- Rule 1, Policy Number Completeness. Logic is correct. It scans all history, so one old failure would fail every run. Agree on a monitoring window.
+- Rule 2, Selected Policy Exists in Source Mart. Every PSTAR and HUON policy has rows with no transaction number, and NULL values never match, so those selections fail regardless of whether they exist in the source. Confirm whether transaction number is required for each source.
+- Rule 3, Selection Reconciliation. The two tables cover different dates, so true selections after January 26, 2026 will appear as missing from randomization history. Compare only dates both tables are expected to cover. This rule matches without transaction number, unlike Rule 2. Confirm which fields identify a transaction.
+- Rule 4, Previously Processed Policy Re-entered Selection. Logic is correct, and the 'true'/'false' values it relies on were confirmed. It evaluates the latest audit history date (September 15, 2026), while Rule 6 evaluates January 26, 2026. Confirm whether a transaction may re-enter selection after a false decision, since both decisions currently count as processed.
+- Rule 5, Agent Identifier Completeness. Logic is correct, and the 'true'/'false' values it relies on were confirmed. Like Rule 1, it scans all history and needs a monitoring window.
+- Rule 6, Selected Policy Volume Anomaly by State. Runs changed from daily to every five days in January 2026, so the same-weekday baseline now mixes the two schedules. Confirm whether this comparison is still valid. The rule also returns PASS when there is not enough history, which hides that the check did not run.
+- Rule 7, Reviewer Assignment Completeness. Zero exceptions returned. The reviewer ID is an integer, so the NULL check is sufficient. Confirm the schema (insurance_master or insurance_master_prod), the Auto cycle and its record count before reporting it as clean. LIMIT 100 caps the failure count.
+- Rule 8, Agent-to-Reviewer Assignment Consistency. Zero exceptions returned, with the same schema and cycle confirmation as Rule 7. Grouping by agent name can split one agent into two groups and hide a conflict, so grouping by agent ID is safer. Records missing an agent ID or reviewer start date are excluded. LIMIT 100 also applies.
+
+Proposed Rules 9-11
+- Rule 9, Selection Indicator Validity. Flags decision values other than 'true' and 'false', which Rules 3-5 would skip.
+- Rule 10, Selection Key Completeness. Flags missing match fields that would otherwise appear as unexplained mismatches in Rules 2-4.
+- Rule 11, Selection Data Freshness. Flags tables more than seven days out of date. The seven-day tolerance is a draft.
+
+Next Steps
+- Review the points above with the data owners.
+- Run Rules 9-11 once in Athena before enabling them.
